@@ -1,6 +1,6 @@
 #### 核心原理
 
-![image-20220727223520919](images/:Users:alex:Library:Application Support:typora-user-images:image-20220727223520919.png)
+![architecture](images/arc.jpg)
 
 1. ##### 用户在config.py中配置任务。
 
