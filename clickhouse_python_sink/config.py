@@ -18,13 +18,14 @@ export_table_list = [
       "partition_expr":"toYYYYMM(pickup_date)",
       "upper_condition":"toYYYYMM(pickup_date)<=201508",
       "lower_condition":"toYYYYMM(pickup_date)>=201506",
+      "split_filed": "pickup_date"#对数据量过大的partition按照split_filed再次切分
     },{
       "db":"default",
       "table":"trips_np",
       "mode":"all",
       "partition_expr":"",
       "upper_condition":"",
-      "lower_condition":"",
+      "lower_condition":""
     }
 ]
 

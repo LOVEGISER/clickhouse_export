@@ -8,19 +8,19 @@ from log_utils import logger
 """
 -------------------------------------------------
 @author: "wanglei@flywheels.com"
-@file: task.py
+@file: executor.py
 @time: 2022-07-27
 -------------------------------------------------
 """
 
-class task():
+class executor():
     def __init__(self):
         return super().__init__()
 
-    def run(self,tasks):
+    def run(self,taskset):
         logger.info("boot_strap start")
         # 具体每个任务的处理
-        for task in tasks:
+        for task in taskset:
             try:
                 logger.info("run task ")
                 mkdir_cmd = task["mkdir_cmd"]

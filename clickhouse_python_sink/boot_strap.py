@@ -8,17 +8,17 @@ from log_utils import logger
 import os
 import sys
 
-from task import task
+from executor import task
 from multiprocessing import Pool, cpu_count
 executor = ThreadPoolExecutor(process_number)
 
 #one process -> one task
 
-def process_backend(tasks):
+def process_backend(taskset):
         try:
-            logger.info("pipeline {} start.....".format(tasks))
-            task_object = task()
-            task_object.run(tasks)
+            logger.info("pipeline {} start.....".format(taskset))
+            executor_object = executor()
+            executor_object.run(taskset)
             #os.system("python3 task_back.py {}".format(json.dumps(tasks)))
         except Exception as e:
             logger.exception(e)
@@ -41,7 +41,7 @@ def task_allocation():
          logger.info("data_sum_cmd :{}".format(data_sum_cmd))
          data_sum = os.popen(data_sum_cmd).read().replace("\n","")
          # 1.2 计算每个进程大概分配的数据量
-         process_agv_count = int(data_sum)/process_number
+         process_avg_count = int(data_sum)/process_number
          # 2.任务分派：一个线程后台对应一个常驻进程支持一部分任务，任务执行完成或进程自动退出
          counter = 0
          for table_config in export_table_list:
@@ -63,10 +63,11 @@ def task_allocation():
 
                 export_cmd = '''{} --query="select * FROM {} INTO OUTFILE '{}/{}.csv' FORMAT CSVWithNames;"'''.format(clickhouse_connect_command,table_full_name,export_path,table)
                 check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.csv', 'CSVWithNames');"'''.format(clickhouse_connect_command,export_path,table)
-                task_set.append({"mkdir_cmd":mkdir_cmd,"db_rows":db_rows,"export_cmd":export_cmd,"check_cmd":check_cmd,"task_id":table})
+                task = {"mkdir_cmd":mkdir_cmd,"db_rows":db_rows,"export_cmd":export_cmd,"check_cmd":check_cmd,"task_id":table}
+                task_set.append(task)
                 batch_list_data_size += db_rows
                 #攒批数据达到batch size大小或者是最后一个表的任务，则提交一个进程处理
-                if batch_list_data_size >= process_agv_count or counter == len(export_table_list):
+                if batch_list_data_size >= process_avg_count or counter == len(export_table_list):
                     task_set_copy = copy.deepcopy(task_set)
                     executor.submit(process_backend, task_set_copy)
                     #p.apply_async(process_backend, args=(task_set_copy))
@@ -86,9 +87,10 @@ def task_allocation():
                     partition_sql = "{}='{}'".format(partition_expr, part)
                     export_cmd = '''{} --query="select * FROM {}  where {} and {} and {}  INTO OUTFILE '{}/{}.csv' FORMAT CSVWithNames;"'''.format( clickhouse_connect_command, table_full_name,partition_sql, lower_condition,upper_condition,export_path, table+"_"+part)
                     check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.csv', 'CSVWithNames');"'''.format(clickhouse_connect_command, export_path, table+"_"+part)
-                    task_set.append({"mkdir_cmd": mkdir_cmd, "db_rows": count, "export_cmd": export_cmd, "check_cmd": check_cmd,"task_id":table+"_"+part})
+                    task = {"mkdir_cmd": mkdir_cmd, "db_rows": count, "export_cmd": export_cmd, "check_cmd": check_cmd,"task_id":table+"_"+part}
+                    task_set.append(task)
                     batch_list_data_size += count
-                    if batch_list_data_size >= process_agv_count  or counter == len(export_table_list):
+                    if batch_list_data_size >= process_avg_count  or counter == len(export_table_list):
                         task_set_copy = copy.deepcopy(task_set)
                         executor.submit(process_backend, task_set_copy)
                         #p.apply_async(process_backend, args=(task_set_copy))
