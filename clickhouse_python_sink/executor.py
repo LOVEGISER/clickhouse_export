@@ -24,7 +24,7 @@ class executor():
             try:
                 logger.info("run task ")
                 mkdir_cmd = task["mkdir_cmd"]
-                db_rows = task["db_rows"]
+                data_rows = task["data_rows"]
                 export_cmd = task["export_cmd"]
                 check_cmd = task["check_cmd"]
                 task_id = task["task_id"]
@@ -39,10 +39,10 @@ class executor():
                 check_cmd_result = int(os.popen(check_cmd).read().replace("\n", ""))
                 logger.info("check_cmd :{}".format(check_cmd))
                 logger.info("check_cmd_result: {}".format(check_cmd_result))
-                if db_rows == check_cmd_result:
+                if data_rows == check_cmd_result:
                     logger.info("task run success:{} ".format(task_id))
                 else:
-                    logger.error("task run error:{}. check data fail: db_rows:{},check_cmd_result:{}".format(task_id, db_rows, check_cmd_result))
+                    logger.error("task run error:{}. check data fail: data_rows:{},check_cmd_result:{}".format(task_id, data_rows, check_cmd_result))
 
             except Exception as e:
                 logger.exception(e)

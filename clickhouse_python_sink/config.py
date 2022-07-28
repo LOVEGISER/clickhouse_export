@@ -16,16 +16,21 @@ export_table_list = [
       "table":"trips",
       "mode":"partition",
       "partition_expr":"toYYYYMM(pickup_date)",
-      "upper_condition":"toYYYYMM(pickup_date)<=201508",
-      "lower_condition":"toYYYYMM(pickup_date)>=201506",
-      "split_filed": "pickup_date"#对数据量过大的partition按照split_filed再次切分
+      "upper_condition":"toYYYYMM(pickup_date)<=201510",
+      "lower_condition":"toYYYYMM(pickup_date)>=201501",
+      "partition_split_filed": "pickup_date",#对数据量过大的partition按照split_filed再次切分
+      "partition_split_filed_model": "continuous",#continuous:连续型（数据按照字段线性增长），discrete：离散型
+       "partition_split_filed_type": "date" #date/datetime
     },{
       "db":"default",
       "table":"trips_np",
       "mode":"all",
       "partition_expr":"",
       "upper_condition":"",
-      "lower_condition":""
+      "lower_condition":"",
+      "partition_split_filed": "",
+      "partition_split_filed_model": "",
+      "partition_split_filed_type": ""
     }
 ]
 
