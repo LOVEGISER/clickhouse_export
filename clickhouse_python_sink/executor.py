@@ -30,7 +30,7 @@ class executor():
                 check_cmd = task["check_cmd"]
                 task_id = task["task_id"]
                 startTime = datetime.now()
-                logger("task_id:{} start run".format(task_id))
+                logger.info("task_id:{} start run".format(task_id))
                 mkdir_cmd_result = os.popen(mkdir_cmd).read().replace("\n", "")
                 logger.info("mkdir_cmd :{}".format(mkdir_cmd))
                 logger.info("mkdir_cmd_result: {}".format(mkdir_cmd_result))
@@ -43,11 +43,11 @@ class executor():
                 check_cmd_result = int(os.popen(check_cmd).read().replace("\n", ""))
                 logger.info("check_cmd_result: {}".format(check_cmd_result))
 
-                logger("task_id:{} end run".format(task_id))
+                logger.info("task_id:{} end run".format(task_id))
 
                 endTime = datetime.now()
                 duringTime = endTime - startTime
-                logger("task_id:{},use time:{}".format(task_id,duringTime))
+                logger.info("task_id:{},use time:{}".format(task_id,duringTime))
 
                 if data_rows == check_cmd_result:
                     logger.info("task run success:{} ".format(task_id))
