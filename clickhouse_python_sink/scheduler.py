@@ -89,7 +89,7 @@ def task_allocation():
                 for part_data in part_data_list:
                     part = str(part_data['part'])
                     count = int(part_data['count'])
-                    sub_partition_max_size = 200000
+                    sub_partition_max_size = 4000000
                     if count < sub_partition_max_size: #如果
                         partition_sql = "{}='{}'".format(partition_expr, part)
                         export_cmd = '''{} --query="select * FROM {}  where {} and {} and {}  INTO OUTFILE '{}/{}.csv' FORMAT CSVWithNames;"'''.format( clickhouse_connect_command, table_full_name,partition_sql, lower_condition,upper_condition,export_path, table+"_"+part)
