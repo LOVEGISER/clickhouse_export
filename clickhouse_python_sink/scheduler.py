@@ -151,6 +151,8 @@ def sub_partition(db,table,table_full_name,partition_expr,upper_condition,lower_
             time_condition =  time_condition.split(" ")[0]
         time_list.append(time_condition)
     time_list.append(max_value)
+    time_list = list(set(time_list))#去重
+    time_list.sort()
     logger.info(time_list)
     task_set = []
     for index in range(len(time_list)):
