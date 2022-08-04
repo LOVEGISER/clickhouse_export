@@ -3,7 +3,9 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from config import process_number, export_table_list, clickhouse_connect_command, user_files_path
+from config import process_number, export_table_list, clickhouse_connect_command, user_files_path, \
+    sub_partition_max_size
+from datatime_util import data_time_diff
 from executor import executor
 from log_utils import logger
 import os
@@ -57,6 +59,9 @@ def task_allocation():
             partition_split_filed = table_config["partition_split_filed"]
             partition_split_filed_model = table_config["partition_split_filed_model"]
             partition_split_filed_type = table_config["partition_split_filed_type"]
+            filenameExtension = table_config["filenameExtension"]
+            format = table_config["format"]
+
             batch_list_data_size = 0
             task_set = []
             export_path = '{}/{}/{}'.format(user_files_path, db, table)
@@ -65,8 +70,8 @@ def task_allocation():
                 data_cmd = """{} --query="SELECT  count(1) FROM {}  " """.format(clickhouse_connect_command, table_full_name)
                 data_rows = int(os.popen(data_cmd).read().replace("\n", ""))
 
-                export_cmd = '''{} --query="select * FROM {} INTO OUTFILE '{}/{}.csv' FORMAT CSVWithNames;"'''.format(clickhouse_connect_command,table_full_name,export_path,table)
-                check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.csv', 'CSVWithNames');"'''.format(clickhouse_connect_command,export_path,table)
+                export_cmd = '''{} --query="select * FROM {} INTO OUTFILE '{}/{}.{}' FORMAT {};"'''.format(clickhouse_connect_command,table_full_name,export_path,table,filenameExtension,format)
+                check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.{}', '{}');"'''.format(clickhouse_connect_command,export_path,table,filenameExtension,format)
                 task = {"mkdir_cmd":mkdir_cmd,"data_rows":data_rows,"export_cmd":export_cmd,"check_cmd":check_cmd,"task_id":table}
                 task_set.append(task)
                 batch_list_data_size += data_rows
@@ -89,17 +94,16 @@ def task_allocation():
                 for part_data in part_data_list:
                     part = str(part_data['part'])
                     count = int(part_data['count'])
-                    sub_partition_max_size = 4000000
                     if count < sub_partition_max_size: #如果
                         partition_sql = "{}='{}'".format(partition_expr, part)
-                        export_cmd = '''{} --query="select * FROM {}  where {} and {} and {}  INTO OUTFILE '{}/{}.csv' FORMAT CSVWithNames;"'''.format( clickhouse_connect_command, table_full_name,partition_sql, lower_condition,upper_condition,export_path, table+"_"+part)
-                        check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.csv', 'CSVWithNames');"'''.format(clickhouse_connect_command, export_path, table+"_"+part)
+                        export_cmd = '''{} --query="select * FROM {}  where {} and {} and {}  INTO OUTFILE '{}/{}.{}' FORMAT {};"'''.format( clickhouse_connect_command, table_full_name,partition_sql, lower_condition,upper_condition,export_path, table+"_"+part,filenameExtension,format)
+                        check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.{}', '{}');"'''.format(clickhouse_connect_command, export_path, table+"_"+part,filenameExtension,format)
                         task = {"mkdir_cmd": mkdir_cmd, "data_rows": count, "export_cmd": export_cmd, "check_cmd": check_cmd,"task_id":table+"_"+part}
                         task_set.append(task)
                         batch_list_data_size += count
                     else:
                         logger.info("partition {} start split".format(part))
-                        sub_task_set = sub_partition(db,table,table_full_name,partition_expr,upper_condition,lower_condition,partition_split_filed,partition_split_filed_type,partition_split_filed_model,sub_partition_max_size,part,mkdir_cmd)
+                        sub_task_set = sub_partition(db,table,table_full_name,partition_expr,upper_condition,lower_condition,partition_split_filed,partition_split_filed_type,partition_split_filed_model,sub_partition_max_size,part,mkdir_cmd,filenameExtension,format)
                         for item in sub_task_set:
                             task_item_count = item["data_rows"]
                             task = item["task"]
@@ -122,34 +126,49 @@ def task_allocation():
 
 
 
-def sub_partition(db,table,table_full_name,partition_expr,upper_condition,lower_condition,partition_split_filed,partition_split_filed_type,partition_split_filed_model,sub_partition_max_size,part,mkdir_cmd):
+def sub_partition(db,table,table_full_name,partition_expr,upper_condition,lower_condition,partition_split_filed,partition_split_filed_type,partition_split_filed_model,sub_partition_max_size,part,mkdir_cmd,filenameExtension,format):
     time_list = []
     partition_sql = "{}='{}'".format(partition_expr, part)
     #获取step_length_sec,max_value,min_value
-    static_sql_cmd = ''' {} --query="SELECT  round(dateDiff('second', min({}), max({}))/(count(1)/{}),0) as step_length_sec ,round((count(1)/{}),0) as bath_num,min({}) as min_value,max({}) as  max_value FROM {}  where {} and {} and {} ;"  --format JSON '''\
-        .format(clickhouse_connect_command,partition_split_filed,partition_split_filed,sub_partition_max_size,sub_partition_max_size,partition_split_filed,partition_split_filed,table_full_name,partition_sql, lower_condition,upper_condition)
+    step_length_sec_expr =''' round(dateDiff('second', min({}), max({}))/(count(1)/{}),0) as step_length_sec '''.format(partition_split_filed,partition_split_filed,sub_partition_max_size)
+    if partition_split_filed_type == 'long':#如果是long，计算步长的表达式需求修改
+        step_length_sec_expr = ''' round((max({})-min({}))/((count(1)/{})),0) as step_length_sec '''.format( partition_split_filed, partition_split_filed, sub_partition_max_size)
+
+    static_sql_cmd = ''' {} --query="SELECT  {} ,round((count(1)/{}),0) as bath_num,min({}) as min_value,max({}) as  max_value FROM {}  where {} and {} and {} ;"  --format JSON '''\
+        .format(clickhouse_connect_command,step_length_sec_expr,sub_partition_max_size,partition_split_filed,partition_split_filed,table_full_name,partition_sql, lower_condition,upper_condition)
+
     logger.info(static_sql_cmd)
     static_sql_result = json.loads(os.popen(static_sql_cmd).read().replace("\n", ""))
 
     static_data = static_sql_result['data'][0]
     step_length_sec = int(static_data['step_length_sec'])
     bath_num = int(static_data['bath_num'])
-    min_value = str(static_data['min_value'])
-    max_value = str(static_data['max_value'])
+    if partition_split_filed_type != 'long':
+        min_value = str(static_data['min_value'])
+        max_value = str(static_data['max_value'])
+    else:
+        min_value = int(static_data['min_value'])
+        max_value = int(static_data['max_value'])
 
     time_list.append(min_value)
     for num in range(1, bath_num):
         step_value = step_length_sec * num
        # step_value_str = "-"+str(step_value)
-        time_condition_cmd =  '''{} --query="SELECT  date_add(second, {}, min({}))   FROM {}   where {} and {} and {}" ;'''\
-            .format(clickhouse_connect_command,step_value,partition_split_filed,table_full_name,partition_sql, lower_condition,upper_condition)
+        if partition_split_filed_type != 'long':
+            # time_condition_cmd =  '''{} --query="SELECT  date_add(second, {}, min({}))   FROM {}   where {} and {} and {}" ;'''\
+            #     .format(clickhouse_connect_command,step_value,partition_split_filed,table_full_name,partition_sql, lower_condition,upper_condition)
+            #
+            #
+            # logger.info(time_condition_cmd)
+            # time_condition = os.popen(time_condition_cmd).read().replace("\n", "")
+            # if partition_split_filed_type == 'date':#如果是日期类型，需要将时间转换为日期
+            #     time_condition =  time_condition.split(" ")[0]
 
+            end_time= data_time_diff(partition_split_filed_type,min_value,step_value)
+            time_list.append(end_time)
+        else:
+            time_list.append(min_value+step_value)
 
-        logger.info(time_condition_cmd)
-        time_condition = os.popen(time_condition_cmd).read().replace("\n", "")
-        if partition_split_filed_type == 'date':#如果是日期类型，需要将时间转换为日期
-            time_condition =  time_condition.split(" ")[0]
-        time_list.append(time_condition)
     time_list.append(max_value)
     time_list = list(set(time_list))#去重
     time_list.sort()
@@ -167,8 +186,8 @@ def sub_partition(db,table,table_full_name,partition_expr,upper_condition,lower_
             file_name = table + "_" + part+"_"+str(index)     
             logger.info(sub_partition_filter)
             export_path = '{}/{}/{}'.format(user_files_path, db, table)
-            export_cmd = '''{} --query="select * FROM {}  where {} and {} and {} and {}  INTO OUTFILE '{}/{}.csv' FORMAT CSVWithNames;"'''.format(clickhouse_connect_command, table_full_name, partition_sql,sub_partition_filter, lower_condition, upper_condition, export_path,file_name)
-            check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.csv', 'CSVWithNames');"'''.format( clickhouse_connect_command, export_path, file_name)
+            export_cmd = '''{} --query="select * FROM {}  where {} and {} and {} and {}  INTO OUTFILE '{}/{}.{}' FORMAT {};"'''.format(clickhouse_connect_command, table_full_name, partition_sql,sub_partition_filter, lower_condition, upper_condition, export_path,file_name,filenameExtension,format)
+            check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.{}', '{}');"'''.format( clickhouse_connect_command, export_path, file_name,filenameExtension,format)
             data_rows_cmd = '''{} --query="select count(1) FROM {}  where {} and {} and {} and {} ;"'''.format(clickhouse_connect_command, table_full_name, partition_sql,sub_partition_filter, lower_condition, upper_condition)
             data_rows = int(os.popen(data_rows_cmd).read().replace("\n", ""))
             

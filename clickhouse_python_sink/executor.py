@@ -26,6 +26,7 @@ class executor():
                 logger.info("run task ")
                 mkdir_cmd = task["mkdir_cmd"]
                 data_rows = task["data_rows"]
+                task_result_state = ""
                 if data_rows != 0:
                     export_cmd = task["export_cmd"]
                     check_cmd = task["check_cmd"]
@@ -51,11 +52,16 @@ class executor():
                     logger.info("task_id:{},use time:{}".format(task_id,duringTime))
 
                     if data_rows == check_cmd_result:
+                        task_result_state = "success"
+                        logger.info("run success task detail:{} ".format(task))
                         logger.info("task run success:{} ".format(task_id))
                     else:
+                        task_result_state = "fail"
                         logger.error("task run error:{}. check data fail: data_rows:{},check_cmd_result:{}".format(task_id, data_rows, check_cmd_result))
                 else:
+                    task_result_state = "fail"
                     logger.error("task run error:{}.  data_rows is 0".format(task_id))
+                logger.info("run {} task detail:{} ".format(task_result_state,task))
 
             except Exception as e:
                 logger.exception(e)
