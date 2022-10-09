@@ -14,6 +14,7 @@ export_table_list = [
     {
       "db":"default",
       "table":"trips",
+      "table_desc": "column1 UInt32, column2 UInt32, column3 UInt32",
       "format":"Parquet", #Parquet/CSVWithNames
       "filenameExtension":"Parquet", #Parquet/csv
       "mode":"partition",

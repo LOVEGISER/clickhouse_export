@@ -50,6 +50,7 @@ def task_allocation():
          for table_config in export_table_list:
             counter += 1
             db = table_config["db"]
+            table_desc = table_config["table_desc"]
             table = table_config["table"]
             table_full_name = db + "." +table
             mode = table_config["mode"]
@@ -71,7 +72,7 @@ def task_allocation():
                 data_rows = int(os.popen(data_cmd).read().replace("\n", ""))
 
                 export_cmd = '''{} --query="select * FROM {} INTO OUTFILE '{}/{}.{}' FORMAT {};"'''.format(clickhouse_connect_command,table_full_name,export_path,table,filenameExtension,format)
-                check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.{}', '{}');"'''.format(clickhouse_connect_command,export_path,table,filenameExtension,format)
+                check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.{}', '{}','{}');"'''.format(clickhouse_connect_command,export_path,table,filenameExtension,format,table_desc)
                 task = {"mkdir_cmd":mkdir_cmd,"data_rows":data_rows,"export_cmd":export_cmd,"check_cmd":check_cmd,"task_id":table}
                 task_set.append(task)
                 batch_list_data_size += data_rows
@@ -97,13 +98,13 @@ def task_allocation():
                     if count < sub_partition_max_size: #如果
                         partition_sql = "{}='{}'".format(partition_expr, part)
                         export_cmd = '''{} --query="select * FROM {}  where {} and {} and {}  INTO OUTFILE '{}/{}.{}' FORMAT {};"'''.format( clickhouse_connect_command, table_full_name,partition_sql, lower_condition,upper_condition,export_path, table+"_"+part,filenameExtension,format)
-                        check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.{}', '{}');"'''.format(clickhouse_connect_command, export_path, table+"_"+part,filenameExtension,format)
+                        check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.{}', '{}','{}');"'''.format(clickhouse_connect_command, export_path, table+"_"+part,filenameExtension,format,table_desc)
                         task = {"mkdir_cmd": mkdir_cmd, "data_rows": count, "export_cmd": export_cmd, "check_cmd": check_cmd,"task_id":table+"_"+part}
                         task_set.append(task)
                         batch_list_data_size += count
                     else:
                         logger.info("partition {} start split".format(part))
-                        sub_task_set = sub_partition(db,table,table_full_name,partition_expr,upper_condition,lower_condition,partition_split_filed,partition_split_filed_type,partition_split_filed_model,sub_partition_max_size,part,mkdir_cmd,filenameExtension,format)
+                        sub_task_set = sub_partition(db,table,table_full_name,partition_expr,upper_condition,lower_condition,partition_split_filed,partition_split_filed_type,partition_split_filed_model,sub_partition_max_size,part,mkdir_cmd,filenameExtension,format,table_desc)
                         for item in sub_task_set:
                             task_item_count = item["data_rows"]
                             task = item["task"]
@@ -126,7 +127,7 @@ def task_allocation():
 
 
 
-def sub_partition(db,table,table_full_name,partition_expr,upper_condition,lower_condition,partition_split_filed,partition_split_filed_type,partition_split_filed_model,sub_partition_max_size,part,mkdir_cmd,filenameExtension,format):
+def sub_partition(db,table,table_full_name,partition_expr,upper_condition,lower_condition,partition_split_filed,partition_split_filed_type,partition_split_filed_model,sub_partition_max_size,part,mkdir_cmd,filenameExtension,format,table_desc):
     time_list = []
     partition_sql = "{}='{}'".format(partition_expr, part)
     #获取step_length_sec,max_value,min_value
@@ -187,7 +188,7 @@ def sub_partition(db,table,table_full_name,partition_expr,upper_condition,lower_
             logger.info(sub_partition_filter)
             export_path = '{}/{}/{}'.format(user_files_path, db, table)
             export_cmd = '''{} --query="select * FROM {}  where {} and {} and {} and {}  INTO OUTFILE '{}/{}.{}' FORMAT {};"'''.format(clickhouse_connect_command, table_full_name, partition_sql,sub_partition_filter, lower_condition, upper_condition, export_path,file_name,filenameExtension,format)
-            check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.{}', '{}');"'''.format( clickhouse_connect_command, export_path, file_name,filenameExtension,format)
+            check_cmd = '''{} --query="SELECT count(1) FROM file('{}/{}.{}', '{}','{}');"'''.format( clickhouse_connect_command, export_path, file_name,filenameExtension,format,table_desc)
             data_rows_cmd = '''{} --query="select count(1) FROM {}  where {} and {} and {} and {} ;"'''.format(clickhouse_connect_command, table_full_name, partition_sql,sub_partition_filter, lower_condition, upper_condition)
             data_rows = int(os.popen(data_rows_cmd).read().replace("\n", ""))
             
